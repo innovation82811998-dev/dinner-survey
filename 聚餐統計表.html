@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>聚餐時間意願統計表</title>
+  <style>
+    * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+    body { background-color: #f1f5f9; margin: 0; padding: 20px; color: #1e293b; font-size: 16px; }
+    .container { max-width: 1200px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+    
+    header { background: white; padding: 20px 24px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
+    h1 { margin: 0; font-size: 28px; font-weight: bold; }
+    .status { margin: 4px 0 0 0; font-size: 14px; color: #64748b; }
+    .btn-group { display: flex; gap: 10px; flex-wrap: wrap; }
+    button { font-size: 16px; font-weight: 500; border: none; padding: 10px 18px; border-radius: 8px; cursor: pointer; transition: background 0.2s; color: white; }
+    .btn-emerald { background-color: #059669; } .btn-emerald:hover { background-color: #047857; }
+    .btn-amber { background-color: #d97706; } .btn-amber:hover { background-color: #b45309; }
+    .btn-indigo { background-color: #4f46e5; } .btn-indigo:hover { background-color: #4338ca; }
+    .btn-sky { background-color: #0284c7; } .btn-sky:hover { background-color: #0369a1; }
+    
+    .panel { background: white; padding: 24px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); display: flex; flex-direction: column; gap: 24px; }
+    
+    /* 統計欄位 */
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+    .stat-card { border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 8px; }
+    .stat-emerald { background-color: #ecfdf5; border: 1px solid #a7f3d0; }
+    .stat-blue { background-color: #eff6ff; border: 1px solid #bfdbfe; }
+    .stat-title { font-size: 18px; font-weight: bold; }
+    .stat-emerald .stat-title { color: #065f46; }
+    .stat-blue .stat-title { color: #1e40af; }
+    .stat-line { display: flex; justify-content: space-between; font-weight: bold; border-bottom: 1px solid rgba(0,0,0,0.08); padding-bottom: 4px; }
+    .text-emerald { color: #059669; }
+    .text-rose { color: #e11d48; }
+    .text-blue { color: #2563eb; }
+    .stat-list { font-size: 14px; color: #475569; min-height: 24px; word-break: break-all; }
+    
+    /* 成員網格與狀態外框 */
+    .member-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
+    .member-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; display: flex; flex-direction: column; justify-content: space-between; gap: 12px; cursor: grab; transition: border-color 0.2s, box-shadow 0.2s; }
+    
+    /* 有勾選選項時顯示醒目黃色外框 */
+    .member-card.voted { border: 2px solid #eab308; box-shadow: 0 0 8px rgba(234, 179, 8, 0.35); background-color: #fefce8; }
+    
+    .member-card:active { cursor: grabbing; }
+    .member-card.dragging { opacity: 0.4; border: 2px dashed #059669; }
+    .card-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #cbd5e1; padding-bottom: 8px; }
+    .card-name { font-size: 18px; font-weight: bold; }
+    .card-actions { display: flex; gap: 6px; }
+    .icon-btn { background: none; border: none; font-size: 16px; cursor: pointer; padding: 2px 4px; border-radius: 4px; color: #475569; }
+    .icon-btn:hover { background: #e2e8f0; }
+    
+    .options-list { display: flex; flex-direction: column; gap: 8px; }
+    .option-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; border-radius: 6px; border: 1px solid #cbd5e1; background: white; cursor: pointer; }
+    .option-all { background: #eff6ff; border-color: #bfdbfe; font-weight: bold; color: #1e40af; }
+    .option-none { background: #fff1f2; border-color: #fecdd3; font-weight: bold; color: #9f1239; }
+    .option-item input { width: 18px; height: 18px; cursor: pointer; }
+    
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 999; }
+    .modal-overlay.hidden { display: none; }
+    .modal { background: white; padding: 24px; border-radius: 16px; width: 100%; max-width: 400px; display: flex; flex-direction: column; gap: 16px; }
+    .modal input { font-size: 16px; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px; width: 100%; }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
+    .btn-cancel { background: #e2e8f0; color: #334155; }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <header>
+      <div>
+        <h1>🍽️ 聚餐時間意願統計表</h1>
+        <p class="status" id="sync-status">🟢 準備就緒</p>
+      </div>
+      <div class="btn-group">
+        <button class="btn-sky" onclick="openEditDateModal()">✏️ 修改日期</button>
+        <button class="btn-emerald" onclick="openAddModal()">➕ 新增成員</button>
+        <button class="btn-amber" onclick="confirmReset()">🔄 重置名單</button>
+        <button class="btn-indigo" onclick="window.print()">📷 列印/存成PDF</button>
+      </div>
+    </header>
+
+    <div class="panel" id="survey-content">
+      <!-- 上方統計區塊 -->
+      <div class="stats-grid">
+        <div class="stat-card stat-emerald">
+          <div class="stat-title" id="stat-label-d1129">📅 11/29 (日)</div>
+          <div class="stat-line text-emerald"><span>可以 (<span id="stat-1129-yes">0</span>)</span></div>
+          <div class="stat-list" id="list-1129-yes">尚無</div>
+          <div class="stat-line text-rose" style="margin-top: 6px;"><span>不可以 (<span id="stat-1129-no">0</span>)</span></div>
+          <div class="stat-list" id="list-1129-no">尚無</div>
+        </div>
+
+        <div class="stat-card stat-emerald">
+          <div class="stat-title" id="stat-label-d1206">📅 12/06 (日)</div>
+          <div class="stat-line text-emerald"><span>可以 (<span id="stat-1206-yes">0</span>)</span></div>
+          <div class="stat-list" id="list-1206-yes">尚無</div>
+          <div class="stat-line text-rose" style="margin-top: 6px;"><span>不可以 (<span id="stat-1206-no">0</span>)</span></div>
+          <div class="stat-list" id="list-1206-no">尚無</div>
+        </div>
+
+        <div class="stat-card stat-emerald">
+          <div class="stat-title" id="stat-label-d1213">📅 12/13 (日)</div>
+          <div class="stat-line text-emerald"><span>可以 (<span id="stat-1213-yes">0</span>)</span></div>
+          <div class="stat-list" id="list-1213-yes">尚無</div>
+          <div class="stat-line text-rose" style="margin-top: 6px;"><span>不可以 (<span id="stat-1213-no">0</span>)</span></div>
+          <div class="stat-list" id="list-1213-no">尚無</div>
+        </div>
+
+        <div class="stat-card stat-blue">
+          <div class="stat-title">✨ 時間都可以</div>
+          <div class="stat-line text-blue"><span>全選 (<span id="stat-all-yes">0</span>)</span></div>
+          <div class="stat-list" id="list-all-yes">尚無</div>
+          <div class="stat-line text-rose" style="margin-top: 6px;"><span>不參加 (<span id="stat-none-no">0</span>)</span></div>
+          <div class="stat-list" id="list-none-no">尚無</div>
+        </div>
+      </div>
+
+      <!-- 成員網格 -->
+      <div class="member-grid" id="member-grid"></div>
+    </div>
+  </div>
+
+  <!-- 新增成員 Modal -->
+  <div class="modal-overlay hidden" id="add-modal">
+    <div class="modal">
+      <h3 style="margin: 0; font-size: 20px;">➕ 新增統計成員</h3>
+      <input type="text" id="new-member-name" placeholder="請輸入姓名...">
+      <div class="modal-actions">
+        <button class="btn-cancel" onclick="closeAddModal()">取消</button>
+        <button class="btn-emerald" onclick="addMember()">確定新增</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 修改日期 Modal -->
+  <div class="modal-overlay hidden" id="edit-date-modal">
+    <div class="modal">
+      <h3 style="margin: 0; font-size: 20px;">✏️ 修改統計日期</h3>
+      <div>
+        <label style="font-size: 14px; color: #64748b;">第 1 個日期：</label>
+        <input type="text" id="edit-date-1" style="margin-top: 4px;">
+      </div>
+      <div>
+        <label style="font-size: 14px; color: #64748b;">第 2 個日期：</label>
+        <input type="text" id="edit-date-2" style="margin-top: 4px;">
+      </div>
+      <div>
+        <label style="font-size: 14px; color: #64748b;">第 3 個日期：</label>
+        <input type="text" id="edit-date-3" style="margin-top: 4px;">
+      </div>
+      <div class="modal-actions">
+        <button class="btn-cancel" onclick="closeEditDateModal()">取消</button>
+        <button class="btn-sky" onclick="saveDates()">儲存修改</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    var GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbylBUmguDcww_-rC-30Dy7iZgExI6Qht55yOOO539-Y3dkK_1eOLTRQcRXPe_lcsXR8/exec";
+
+    var dateTexts = {
+      d1129: "📅 11/29 (日)",
+      d1206: "📅 12/06 (日)",
+      d1213: "📅 12/13 (日)"
+    };
+
+    var defaultNames = [
+      "01楊璿學", "02施佑昇", "03楊舜喨", "04邱杰煒", "05林佐任", "06王妍霽", 
+      "07劉必慧", "08劉慧麗", "10黃奕崴", "12詹雨璇", "19李屏", "21廖芷筠", 
+      "26蕭舜中", "27林子恆", "30郭憲燁", "31黃冠羚", "32陳昱仰", "33施辰穎", "34吳博鈞",
+      "柔勻", "亞淇", "王嬿琦", "施怡潔", "薛慈琳", "涂姍汝", "李語宸", "康裴舫", 
+      "陳心柔", "李雯華", "李姿儀", "李珈儀", "朱映璇", "李誼埼", "賴董", "蘇董", "張凱嵐"
+    ];
+
+    var members = defaultNames.map(function(name, index) {
+      return { id: 'm_' + (index + 1), name: name, d1129: false, d1206: false, d1213: false, all: false, none: false };
+    });
+
+    function updateDateLabels() {
+      document.getElementById('stat-label-d1129').innerText = dateTexts.d1129;
+      document.getElementById('stat-label-d1206').innerText = dateTexts.d1206;
+      document.getElementById('stat-label-d1213').innerText = dateTexts.d1213;
+    }
+
+    function renderGrid() {
+      updateDateLabels();
+      var grid = document.getElementById('member-grid');
+      if (!grid) return;
+      grid.innerHTML = '';
+
+      members.forEach(function(m) {
+        var hasVoted = m.d1129 || m.d1206 || m.d1213 || m.all || m.none;
+        var card = document.createElement('div');
+        card.className = 'member-card' + (hasVoted ? ' voted' : '');
+        card.draggable = true;
+        card.dataset.id = m.id;
+
+        card.innerHTML = `
+          <div class="card-header">
+            <span class="card-name">${m.name}</span>
+            <div class="card-actions">
+              <button class="icon-btn" onclick="editMemberName('${m.id}')" title="修改名字">✏️</button>
+              <button class="icon-btn" onclick="deleteMember('${m.id}')" title="刪除成員">🗑️</button>
+            </div>
+          </div>
+          <div class="options-list">
+            <label class="option-item option-all">
+              <span>✨ 時間都可以</span>
+              <input type="checkbox" ${m.all ? 'checked' : ''} onchange="toggleAll('${m.id}', this.checked)">
+            </label>
+            <label class="option-item option-none">
+              <span>❌ 不參加</span>
+              <input type="checkbox" ${m.none ? 'checked' : ''} onchange="toggleNone('${m.id}', this.checked)">
+            </label>
+            <label class="option-item">
+              <span>${dateTexts.d1129}</span>
+              <input type="checkbox" ${m.d1129 ? 'checked' : ''} onchange="toggleDate('${m.id}', 'd1129', this.checked)">
+            </label>
+            <label class="option-item">
+              <span>${dateTexts.d1206}</span>
+              <input type="checkbox" ${m.d1206 ? 'checked' : ''} onchange="toggleDate('${m.id}', 'd1206', this.checked)">
+            </label>
+            <label class="option-item">
+              <span>${dateTexts.d1213}</span>
+              <input type="checkbox" ${m.d1213 ? 'checked' : ''} onchange="toggleDate('${m.id}', 'd1213', this.checked)">
+            </label>
+          </div>
+        `;
+
+        card.addEventListener('dragstart', handleDragStart);
+        card.addEventListener('dragover', handleDragOver);
+        card.addEventListener('drop', handleDrop);
+        card.addEventListener('dragend', handleDragEnd);
+
+        grid.appendChild(card);
+      });
+    }
+
+    var dragSrcEl = null;
+    function handleDragStart(e) {
+      dragSrcEl = this;
+      this.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+    }
+    function handleDragOver(e) {
+      if (e.preventDefault) e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      return false;
+    }
+    function handleDrop(e) {
+      if (e.stopPropagation) e.stopPropagation();
+      if (dragSrcEl !== this) {
+        var grid = document.getElementById('member-grid');
+        var cards = Array.from(grid.children);
+        var srcIndex = cards.indexOf(dragSrcEl);
+        var targetIndex = cards.indexOf(this);
+
+        var movedItem = members.splice(srcIndex, 1)[0];
+        members.splice(targetIndex, 0, movedItem);
+
+        renderGrid();
+        updateStats();
+        saveDataToCloud();
+      }
+      return false;
+    }
+    function handleDragEnd() {
+      this.classList.remove('dragging');
+    }
+
+    function updateStats() {
+      var list1129Yes = [], list1129No = [];
+      var list1206Yes = [], list1206No = [];
+      var list1213Yes = [], list1213No = [];
+      var listAllYes = [], listNoneNo = [];
+
+      members.forEach(function(m) {
+        var hasVoted = m.d1129 || m.d1206 || m.d1213 || m.all || m.none;
+        
+        if (m.none) {
+          listNoneNo.push(m.name);
+        } else if (m.all) {
+          listAllYes.push(m.name);
+        } else {
+          if (m.d1129) list1129Yes.push(m.name);
+          if (m.d1206) list1206Yes.push(m.name);
+          if (m.d1213) list1213Yes.push(m.name);
+        }
+
+        if (hasVoted && !m.all && !m.none) {
+          if (!m.d1129) list1129No.push(m.name);
+          if (!m.d1206) list1206No.push(m.name);
+          if (!m.d1213) list1213No.push(m.name);
+        }
+      });
+
+      document.getElementById('stat-1129-yes').innerText = list1129Yes.length + listAllYes.length;
+      document.getElementById('list-1129-yes').innerText = list1129Yes.length > 0 ? list1129Yes.join(', ') : '尚無';
+      document.getElementById('stat-1129-no').innerText = list1129No.length + listNoneNo.length;
+      document.getElementById('list-1129-no').innerText = (list1129No.length > 0 || listNoneNo.length > 0) ? list1129No.concat(listNoneNo).join(', ') : '尚無';
+
+      document.getElementById('stat-1206-yes').innerText = list1206Yes.length + listAllYes.length;
+      document.getElementById('list-1206-yes').innerText = list1206Yes.length > 0 ? list1206Yes.join(', ') : '尚無';
+      document.getElementById('stat-1206-no').innerText = list1206No.length + listNoneNo.length;
+      document.getElementById('list-1206-no').innerText = (list1206No.length > 0 || listNoneNo.length > 0) ? list1206No.concat(listNoneNo).join(', ') : '尚無';
+
+      document.getElementById('stat-1213-yes').innerText = list1213Yes.length + listAllYes.length;
+      document.getElementById('list-1213-yes').innerText = list1213Yes.length > 0 ? list1213Yes.join(', ') : '尚無';
+      document.getElementById('stat-1213-no').innerText = list1213No.length + listNoneNo.length;
+      document.getElementById('list-1213-no').innerText = (list1213No.length > 0 || listNoneNo.length > 0) ? list1213No.concat(listNoneNo).join(', ') : '尚無';
+
+      document.getElementById('stat-all-yes').innerText = listAllYes.length;
+      document.getElementById('list-all-yes').innerText = listAllYes.length > 0 ? listAllYes.join(', ') : '尚無';
+      document.getElementById('stat-none-no').innerText = listNoneNo.length;
+      document.getElementById('list-none-no').innerText = listNoneNo.length > 0 ? listNoneNo.join(', ') : '尚無';
+    }
+
+    function toggleDate(id, field, val) {
+      var m = members.find(function(x) { return x.id === id; });
+      if (m) {
+        if (val) m.none = false;
+        m[field] = val;
+        m.all = m.d1129 && m.d1206 && m.d1213;
+        renderGrid();
+        updateStats();
+        saveDataToCloud();
+      }
+    }
+
+    function toggleAll(id, val) {
+      var m = members.find(function(x) { return x.id === id; });
+      if (m) {
+        if (val) m.none = false;
+        m.all = val; m.d1129 = val; m.d1206 = val; m.d1213 = val;
+        renderGrid();
+        updateStats();
+        saveDataToCloud();
+      }
+    }
+
+    function toggleNone(id, val) {
+      var m = members.find(function(x) { return x.id === id; });
+      if (m) {
+        m.none = val;
+        if (val) { m.all = false; m.d1129 = false; m.d1206 = false; m.d1213 = false; }
+        renderGrid();
+        updateStats();
+        saveDataToCloud();
+      }
+    }
+
+    function editMemberName(id) {
+      var m = members.find(function(x) { return x.id === id; });
+      if (m) {
+        var newName = prompt('請輸入新的成員名字：', m.name);
+        if (newName && newName.trim() !== '') {
+          m.name = newName.trim();
+          renderGrid();
+          updateStats();
+          saveDataToCloud();
+        }
+      }
+    }
+
+    function deleteMember(id) {
+      var m = members.find(function(x) { return x.id === id; });
+      if (m && confirm('確定要刪除「' + m.name + '」嗎？')) {
+        members = members.filter(function(x) { return x.id !== id; });
+        renderGrid();
+        updateStats();
+        saveDataToCloud();
+      }
+    }
+
+    function openAddModal() { document.getElementById('new-member-name').value = ''; document.getElementById('add-modal').classList.remove('hidden'); }
+    function closeAddModal() { document.getElementById('add-modal').classList.add('hidden'); }
+    
+    function openEditDateModal() {
+      document.getElementById('edit-date-1').value = dateTexts.d1129;
+      document.getElementById('edit-date-2').value = dateTexts.d1206;
+      document.getElementById('edit-date-3').value = dateTexts.d1213;
+      document.getElementById('edit-date-modal').classList.remove('hidden');
+    }
+    function closeEditDateModal() { document.getElementById('edit-date-modal').classList.add('hidden'); }
+    function saveDates() {
+      dateTexts.d1129 = document.getElementById('edit-date-1').value.trim() || dateTexts.d1129;
+      dateTexts.d1206 = document.getElementById('edit-date-2').value.trim() || dateTexts.d1206;
+      dateTexts.d1213 = document.getElementById('edit-date-3').value.trim() || dateTexts.d1213;
+      closeEditDateModal();
+      renderGrid();
+      updateStats();
+    }
+
+    function addMember() {
+      var name = document.getElementById('new-member-name').value.trim();
+      if (!name) return alert('請輸入姓名！');
+      members.push({ id: 'm_' + Date.now(), name: name, d1129: false, d1206: false, d1213: false, all: false, none: false });
+      closeAddModal();
+      renderGrid();
+      updateStats();
+      saveDataToCloud();
+    }
+
+    function confirmReset() {
+      if (confirm('確定要重置為預設的 36 位成員名單嗎？')) {
+        members = defaultNames.map(function(name, index) {
+          return { id: 'm_' + (index + 1), name: name, d1129: false, d1206: false, d1213: false, all: false, none: false };
+        });
+        renderGrid();
+        updateStats();
+        saveDataToCloud();
+      }
+    }
+
+    function saveDataToCloud() {
+      document.getElementById('sync-status').innerText = "⏳ 正在同步更新...";
+      try {
+        fetch(GOOGLE_SCRIPT_URL, { method: "POST", body: JSON.stringify(members) })
+          .then(function() { document.getElementById('sync-status').innerText = "🟢 已同步至 Google 試算表"; })
+          .catch(function() { document.getElementById('sync-status').innerText = "🟢 本機紀錄更新完成"; });
+      } catch(e) {
+        document.getElementById('sync-status').innerText = "🟢 本機紀錄更新完成";
+      }
+    }
+
+    // 立即安全渲染畫面與統計，不受雲端連線阻塞影響
+    renderGrid();
+    updateStats();
+
+    // 背景安全抓取雲端資料
+    try {
+      fetch(GOOGLE_SCRIPT_URL)
+        .then(function(res) { return res.json(); })
+        .then(function(data) {
+          if (data && Array.isArray(data) && data.length > 0) {
+            data.forEach(function(cloudM) {
+              var localM = members.find(function(m) { return m.name === cloudM.name; });
+              if (localM) {
+                localM.d1129 = cloudM.d1129 === true || cloudM.d1129 === "true";
+                localM.d1206 = cloudM.d1206 === true || cloudM.d1206 === "true";
+                localM.d1213 = cloudM.d1213 === true || cloudM.d1213 === "true";
+                localM.all = cloudM.all === true || cloudM.all === "true";
+                localM.none = cloudM.none === true || cloudM.none === "true";
+              }
+            });
+            renderGrid();
+            updateStats();
+            document.getElementById('sync-status').innerText = "🟢 已與 Google 試算表同步";
+          }
+        })
+        .catch(function() {
+          document.getElementById('sync-status').innerText = "🟢 已載入名單 (本機模式)";
+        });
+    } catch(e) {
+      document.getElementById('sync-status').innerText = "🟢 已載入名單 (本機模式)";
+    }
+  </script>
+</body>
+</html>
